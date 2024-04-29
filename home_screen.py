@@ -1,7 +1,41 @@
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
+from tkcalendar import Calendar
 
+def add_task():
+    # Create a new window for adding tasks
+    add_task_window = tk.Toplevel()
+    add_task_window.title("Add New Task")
+
+    # Label and entry for task name
+    lbl_task_name = tk.Label(add_task_window, text="Task Name:")
+    lbl_task_name.grid(row=0, column=0, padx=10, pady=5, sticky="e")
+    entry_task_name = tk.Entry(add_task_window)
+    entry_task_name.grid(row=0, column=1, padx=10, pady=5)
+
+    # Calendar for selecting due date
+    lbl_due_date = tk.Label(add_task_window, text="Due Date:")
+    lbl_due_date.grid(row=1, column=0, padx=10, pady=5, sticky="e")
+    cal_due_date = Calendar(add_task_window, selectmode="day", date_pattern="yyyy-mm-dd")
+    cal_due_date.grid(row=1, column=1, padx=10, pady=5)
+
+    # Function to save the task with name and due date
+    def save_task():
+        task_name = entry_task_name.get()
+        due_date = cal_due_date.get_date()
+        # Here you can save the task to your database or data source
+        print("Task Name:", task_name)
+        print("Due Date:", due_date)
+        add_task_window.destroy()
+
+    # Button to save the task
+    btn_save = tk.Button(add_task_window, text="Save Task", command=save_task)
+    btn_save.grid(row=2, column=0, columnspan=2, pady=10)
+
+# Sample function to open the add task window
+def open_add_task():
+    add_task()
 
 def show_error(message):
     messagebox.showerror("Error", message)
