@@ -1,7 +1,5 @@
 <h1>Trails - A simple Time Management Application</h1>  <br/>
-Trails is a python based Time Management Application currently Available on Desktop 
-<br/>
----
+<h2>Trails is a python based Time Management Application currently Available on Desktop</h2>
 <br/>
 <br/>
 
