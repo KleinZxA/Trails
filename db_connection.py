@@ -7,4 +7,3 @@ def connect():
         password="password",
         database="credentials"
     )
-
