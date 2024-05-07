@@ -8,4 +8,5 @@ It is Currently a Work In Progress.<br/>
 <br/>`pip install bcrypt request tkinter mysql-connector-python`
 <br/>
 > [!NOTE]
-> This is the mainstream version. If you want the barebones version you should check <a href="https://github.com/P4radox624/Trails_alpha">this</a>
+> This is the mainstream version. If you want the barebones version you should check
+ <a href="https://github.com/P4radox624/Trails_alpha">this</a>
