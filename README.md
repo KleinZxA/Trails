@@ -6,3 +6,6 @@ It is Currently a Work In Progress.<br/>
 > [!IMPORTANT]
 > Before Executing code, Install Dependencies:
 <br/>`pip install bcrypt request tkinter mysql-connector-python`
+<br/>
+> [!NOTE]
+> This is the mainstream version. If you want the barebones version you should check [here](https://github.com/P4radox624/Trails_alpha).
