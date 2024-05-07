@@ -3,7 +3,7 @@ Trails is a python based Time Management Application currently Available on Desk
 <br/>
 ---
 <br/>
-> [!NOTE] 
+> [!IMPORTANT]
 > It is Currently a Work In Progress.<br/>
 <br/>
 
