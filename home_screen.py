@@ -1,29 +1,31 @@
 import tkinter as tk
-import os
 import json
 from tkinter import messagebox
 from tkinter import ttk
 from tkcalendar import Calendar
 from datetime import datetime, timedelta
-from tkinter import simpledialog
+#from tkinter import simpledialog
+from json.decoder import JSONDecodeError
 
 # Global list to store tasks
-#tasks = []
 TASKS_FILE = "tasks.json"
 
 # Function to load tasks from file
 def load():
     global tasks
-    if os.path.exists(TASKS_FILE):
+    try:
         with open(TASKS_FILE, "r") as file:
             tasks = json.load(file)
-    else:
+    except (FileNotFoundError, JSONDecodeError):
         tasks = []
 
 # Function to save tasks to file
 def save():
-    with open(TASKS_FILE, "w") as file:
-        json.dump(tasks, file)
+    try:
+        with open(TASKS_FILE, "w") as file:
+            json.dump(tasks, file)
+    except IOError:
+        print("Error: Unable to save tasks to file.")
 
 # Call load function when the application starts
 load()
@@ -45,19 +47,28 @@ def add_task():
     cal_due_date = Calendar(add_task_window, selectmode="day", date_pattern="yyyy-mm-dd")
     cal_due_date.grid(row=1, column=1, padx=10, pady=5)
 
-    # Function to save the task with name and due date
+    # Combobox for selecting due time
+    lbl_due_time = tk.Label(add_task_window, text="Set Time:")
+    lbl_due_time.grid(row=2, column=0, padx=10, pady=5, sticky="e")
+    combo_due_time = ttk.Combobox(add_task_window, values=[f"{h:02}:{m:02}" for h in range(24) for m in range(0, 60, 15)])
+    combo_due_time.current(0)  # Default to the first time slot
+    combo_due_time.grid(row=2, column=1, padx=10, pady=5)
+
+    # Function to save the task with name, due date, and time
     def save_task():
         task_name = entry_task_name.get()
         due_date = cal_due_date.get_date()
+        due_time = combo_due_time.get()
+        due_datetime = f"{due_date} {due_time}"
         # Save the task to the global list
-        tasks.append({"name": task_name, "due_date": due_date, "notes": ""})  # Initialize notes as empty string
+        tasks.append({"name": task_name, "due_datetime": due_datetime, "notes": ""})  # Initialize notes as empty string
         save()
         messagebox.showinfo("Success", "Task added successfully!")
         add_task_window.destroy()
 
     # Button to save the task
     btn_save = tk.Button(add_task_window, text="Save", command=save_task)
-    btn_save.grid(row=2, column=0, columnspan=2, pady=10)
+    btn_save.grid(row=3, column=0, columnspan=2, pady=10)
 
 def delete_task(tree):
     # Function to delete selected task
@@ -80,20 +91,28 @@ def delete_task(tree):
 
 def check_due_dates():
     # Get the current date
-    current_date = datetime.now().date()
+    current_datetime = datetime.now()
 
     # List to store tasks with matching deadlines
     matching_tasks = []
+    date_due = []
 
     # Iterate through tasks
     for task in tasks:
-        due_date = datetime.strptime(task["due_date"], "%Y-%m-%d").date()
-        if due_date == current_date + timedelta(days=1):
+        # Parse the due date and time from the due_datetime string
+        due_datetime = datetime.strptime(task["due_datetime"], "%Y-%m-%d %H:%M")
+        #str_due_date = str(due_datetime)
+        # Check if the due date is within one day from now
+        if current_datetime < due_datetime <= current_datetime + timedelta(days=1):
             matching_tasks.append(task["name"])
+            date_due.append(task["due_datetime"])
 
     # If there are matching tasks, display them in a single messagebox
     if matching_tasks:
-        messagebox.showinfo("Reminder", f"The following tasks are due tomorrow:\n\n{', '.join(matching_tasks)}")
+        tasks_info = '\n'.join(f'• {task} @ {date_due}' for task, date_due in zip(matching_tasks, date_due))
+        messagebox.showinfo("Reminder", f"The following tasks are due within the next 24 hours:\n\n{tasks_info}")
+    else:
+        messagebox.showinfo("No Tasks", "No tasks are due within the next 24 hours.")
 
 def view_tasks():
     # Create a new window for viewing tasks
@@ -112,7 +131,9 @@ def view_tasks():
 
     # Add tasks to the treeview
     for task in tasks:
-        tree.insert("", "end", values=(task["name"], task["due_date"]))
+        task_name = task.get("name", "")
+        due_datetime = task.get("due_datetime", "")
+        tree.insert("", "end", values=(task_name, due_datetime))
 
     # Add scrollbar to the treeview
     scrollbar = ttk.Scrollbar(view_tasks_window, orient="vertical", command=tree.yview)
@@ -123,22 +144,72 @@ def view_tasks():
     txt_notepad = tk.Text(view_tasks_window, wrap="word")
     txt_notepad.grid(row=1, column=2, rowspan=4, padx=10, pady=5, sticky="nsew")  # Adjust rowspan as needed
 
+    def edit_task_due_date(tree, parent_window):
+        selected_item = tree.selection()
+        if not selected_item:
+            show_error("Please select a task to edit.")
+            return
+
+        # Assuming the task name is in the first column
+        task_name = tree.item(selected_item[0], "values")[0]
+
+        # Create a new window for editing the due date
+        edit_due_date_window = tk.Toplevel(parent_window)
+        edit_due_date_window.title("Edit Due Date")
+
+        # Calendar for selecting new due date
+        cal_new_due_date = Calendar(edit_due_date_window, selectmode="day", date_pattern="yyyy-mm-dd")
+        cal_new_due_date.grid(row=0, column=0, padx=10, pady=5)
+
+        # Combobox for selecting new due time
+        times = [f"{hour:02d}:00" for hour in range(24)]  # Generates "00:00", "01:00", ..., "23:00"
+        combo_new_due_time = ttk.Combobox(edit_due_date_window, values=times)
+        combo_new_due_time.current(0)
+        combo_new_due_time.grid(row=1, column=0, padx=10, pady=5)
+
+        # Function to update the due date in real-time
+        def update_due_date():
+            new_due_date = cal_new_due_date.get_date()
+            new_due_time = combo_new_due_time.get()
+            new_due_datetime = f"{new_due_date} {new_due_time}"
+            # Update the task in the global tasks list
+            for task in tasks:
+                if task["name"] == task_name:
+                    task["due_datetime"] = new_due_datetime
+                    tree.item(selected_item, values=(task["name"], task["due_datetime"])) #Update the due datetime in the treeview
+                    save()
+                    messagebox.showinfo("Success", "Due date updated successfully!")
+                    edit_due_date_window.destroy()
+                    return
+
+        # Button to save the new due date
+        btn_save_new_due_date = tk.Button(edit_due_date_window, text="Save", command=update_due_date)
+        btn_save_new_due_date.grid(row=2, column=0, pady=10)
+
     # Function to load notes for selected task
     def load_notes():
         selected_item = tree.selection()
         if selected_item:
             task_name = tree.item(selected_item, "values")[0]
             for task in tasks:
-                if task["name"] == task_name:
-                    if "notes" in task:
-                        txt_notepad.delete("1.0", tk.END)  # Clear existing notes
-                        txt_notepad.insert(tk.END, task["notes"])  # Load notes for selected task
-                        return  # Exit function if notes are found
+                if task.get("name") == task_name:
+                    notes = task.get("notes", "")
+                    txt_notepad.delete("1.0", tk.END)  # Clear existing notes
+                    txt_notepad.insert(tk.END, notes)  # Load notes for selected task
+                    return  # Exit function if notes are found
         # Clear text widget if no notes found
         txt_notepad.delete("1.0", tk.END)
 
     # Bind treeview selection to load notes
     tree.bind("<<TreeviewSelect>>", lambda event: load_notes())
+
+    # Button to delete selected task
+    btn_delete_task = tk.Button(view_tasks_window, text="Delete Task", command=lambda: delete_task(tree))
+    btn_delete_task.grid(row=2, column=0, pady=5, sticky="ew")
+
+    # Button to edit due date of selected task
+    btn_edit_due_date = tk.Button(view_tasks_window, text="Edit Due Date", command=lambda: edit_task_due_date(tree, view_tasks_window))
+    btn_edit_due_date.grid(row=3, column=0, pady=5, sticky="ew")
 
     # Function to save notes for selected task
     def save_notes():
@@ -146,23 +217,18 @@ def view_tasks():
         if selected_item:
             task_name = tree.item(selected_item, "values")[0]
             for task in tasks:
-                if task["name"] == task_name:
-                    task["notes"] = txt_notepad.get("1.0", tk.END)  # Save notes for selected task
+                if task.get("name") == task_name:
+                    task["notes"] = txt_notepad.get("1.0", tk.END).strip()  # Update notes for selected task
                     save()
                     messagebox.showinfo("Success", "Notes saved successfully!")
+                    return
 
     # Add a button to save notes
     btn_save_notes = tk.Button(view_tasks_window, text="Save Notes", command=save_notes)
     btn_save_notes.grid(row=5, column=2, pady=10, sticky="e")
 
-    # Add Edit Task Due Date button
-    btn_edit_due_date = tk.Button(view_tasks_window, text="Edit Due Date", command=lambda: edit_task_due_date(tree, view_tasks_window), font=("yu gothic ui", 10))
-    btn_edit_due_date.grid(row=6, column=0, columnspan=2, pady=10)
-
-    # Add delete button
-    btn_delete_task = tk.Button(view_tasks_window, text="Delete Task", command=lambda: delete_task(tree), font=("yu gothic ui", 10))
-    btn_delete_task.grid(row=7, column=0, columnspan=2, pady=10)
-
+    center_window(view_tasks_window)
+    # Function to delete selected task
 def show_error(message):
     messagebox.showerror("Error", message)
 
@@ -195,6 +261,10 @@ def show_home_screen(username, login_window):
     header_frame = tk.Frame(home_window, bg="#e21818")  # Set background color to empty string for transparency
     header_frame.pack(fill="x")
 
+    # Make the row and column expandable
+    home_window.rowconfigure(0, weight=0)
+    home_window.columnconfigure(0, weight=1)
+
     # Create a label to display the username in the header
     lbl_username = tk.Label(header_frame, text=f"{username}'s Trails!", font=("yu gothic ui", 12, "bold"), bg="#e21818", fg="white", padx=10, pady=5)
     lbl_username.pack(side="left")
@@ -208,6 +278,8 @@ def show_home_screen(username, login_window):
 
     # Create a menu
     menu = tk.Menu(home_window, tearoff=0)
+    menu.add_command(label="Tasks", command=view_tasks)
+    menu.add_command(label="Notifications", command=check_due_dates)
     menu.add_command(label="Logout", command=lambda: logout(home_window, login_window))
     menu.add_separator()
     menu.add_command(label="Close", command=home_window.quit)
@@ -220,66 +292,32 @@ def show_home_screen(username, login_window):
     main_frame = tk.Frame(home_window)
     main_frame.pack(expand=True, fill="both")
 
-     # Button to add task
+    # Make the row and column expandable
+    home_window.rowconfigure(1, weight=1)
+    home_window.columnconfigure(0, weight=1)
+
+    # Add Calendar widget
+    cal = Calendar(main_frame, selectmode="day", date_pattern="yyyy-mm-dd")
+    cal.pack(padx=10, pady=10)
+
+    # Create a function to update and display tasks based on selected date
+    def update_tasks_for_date():
+        selected_date = cal.get_date()
+        matching_tasks = [(task["name"], task["due_datetime"].split()[1]) for task in tasks if task.get("due_datetime", "").startswith(selected_date)]
+        if matching_tasks:
+            tasks_info = '\n'.join(f'{task[0]} @ {task[1]}' for task in matching_tasks)
+            messagebox.showinfo("Tasks for Selected Date", f"Tasks for {selected_date}:\n\n{tasks_info}")
+        else:
+            messagebox.showinfo("No Tasks", f"No tasks for {selected_date}.")
+
+    # Bind the update function to the calendar's date click event
+    cal.bind("<<CalendarSelected>>", lambda event: update_tasks_for_date())
+
+    # Button to add task
     btn_add_task = tk.Button(main_frame, text="+", font=("Helvetica", 24), command=add_task, bg="red", fg="white")
     btn_add_task.place(relx=1, rely=1, anchor="se", x=-20, y=-20)  # Placing the button at the bottom right with some padding
 
-    # Add a button to view tasks
-    btn_view_tasks = tk.Button(main_frame, text="View Tasks", command=view_tasks, font=("yu gothic ui", 10))
-    btn_view_tasks.grid(row=1, column=0, columnspan=2, pady=10)  # Center the button horizontally
-
-    # Button to manually check for upcoming due dates
-    btn_check_due_dates = tk.Button(main_frame, text="Check Due Dates", command=check_due_dates, font=("yu gothic ui", 10))
-    btn_check_due_dates.grid(row=2, column=0, columnspan=2, pady=10)  # Center the button horizontally
-
     home_window.mainloop()
-
-def edit_task_due_date(tree, parent_window):
-    selected_item = tree.selection()
-    if not selected_item:
-        show_error("Please select a task to edit.")
-        return
-
-    # Assuming the task name is in the first column
-    task_name = tree.item(selected_item[0], "values")[0]
-
-    # Create a new window for editing the due date
-    edit_due_date_window = tk.Toplevel(parent_window)
-    edit_due_date_window.title("Edit Due Date")
-
-    # Function to update the due date in real-time
-    def update_due_date(event):
-        new_due_date = cal_new_due_date.get_date()
-        # Update the task in the global tasks list
-        for task in tasks:
-            if task["name"] == task_name:
-                task["due_date"] = new_due_date
-                tree.item(selected_item, values=(task["name"], task["due_date"]))  # Update the due date in the treeview
-                save()
-                break
-
-    # Calendar for selecting new due date
-    cal_new_due_date = Calendar(edit_due_date_window, selectmode="day", date_pattern="yyyy-mm-dd")
-    cal_new_due_date.pack(padx=10, pady=10)
-
-    # Bind calendar selection event to update_due_date function
-    cal_new_due_date.bind("<<CalendarSelected>>", update_due_date)
-
-    # Function to save the new due date
-    def save_new_due_date():
-        new_due_date = cal_new_due_date.get_date()
-        # Update the task in the global tasks list
-        for task in tasks:
-            if task["name"] == task_name:
-                task["due_date"] = new_due_date
-                save()
-                messagebox.showinfo("Success", "Due date updated successfully!")
-                edit_due_date_window.destroy()
-                return
-
-    # Button to save the new due date
-    btn_save_new_due_date = tk.Button(edit_due_date_window, text="Save", command=save_new_due_date)
-    btn_save_new_due_date.pack(pady=10)
 
 # For testing purposes
 # show_home_screen("John", None)

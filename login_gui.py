@@ -133,8 +133,8 @@ img = img.resize((25, 15))
 eye_img = ImageTk.PhotoImage(img)
 
 # Calculate width based on desired height
-height_pixels = int(16 * 96 / 2.54)
-width_pixels = int(height_pixels * 11 / 16)
+height_pixels = int(16 * 78 / 3)
+width_pixels = int(624 * 11 / 16)
 root.geometry(f"{width_pixels}x{height_pixels}")
 
 # Login and register frames
